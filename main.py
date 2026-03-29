@@ -1,55 +1,57 @@
 import os
-import telebot
-import requests
 import re
+import requests
+from pyrogram import Client, filters
 from flask import Flask
 from threading import Thread
 
-# --- إعداد السيرفر ---
+# --- إعداد السيرفر لـ Render ---
 app = Flask('')
-
 @app.route('/')
-def home():
-    return "Bot is Running!"
+def home(): return "UserBot is Alive!"
 
 def run():
-    # Render يستخدم المنفذ 10000 غالباً، لذا سنتركه مرناً
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# --- إعداد البوت ---
-TOKEN = '7695684640:AAHisgNStN12mWy_qVyXtf3h7XUuMOhIYj0'
-bot = telebot.TeleBot(TOKEN)
+# --- إعداد الحساب (UserBot) ---
+# استبدل هذه القيم بالتي استخرجتها من my.telegram.org
+api_id = 1234567  # ضع الـ api_id الخاص بك هنا
+api_hash = "your_api_hash_here" # ضع الـ api_hash الخاص بك هنا
+# التوكن الخاص بالبوت الذي أنشأته سابقاً
+bot_token = "7695684640:AAHisgNStN12mWy_qVyXtf3h7XUuMOhIYj0"
 
-def extract_urls(text):
-    return re.findall(r'(https?://[^\s]+)', text)
+app_bot = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "🚀 البوت جاهز للتحميل بأعلى جودة!\nأرسل الروابط الآن.")
+@app_bot.on_message(filters.text & filters.private)
+async def download_and_send(client, message):
+    urls = re.findall(r'(https?://[^\s]+)', message.text)
+    if not urls: return
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    urls = extract_urls(message.text)
-    if not urls:
-        return
-
-    msg = bot.reply_to(message, f"⏳ جاري معالجة {len(urls)} رابط...")
+    status = await message.reply("⏳ جاري التحميل والرفع (يدعم حتى 2 جيجا)...")
 
     for url in urls:
         try:
-            # الإرسال عبر الرابط مباشرة (أفضل وأسرع جودة)
-            bot.send_video(message.chat.id, url, caption="✅ تم التحميل بنجاح")
-        except Exception:
-            bot.send_message(message.chat.id, f"❌ عذراً، لم أستطع تحميل هذا الرابط (قد يكون الحجم أكبر من 50MB):\n{url}")
+            filename = f"video_{message.id}.mp4"
+            # تحميل الفيديو إلى سيرفر Render مؤقتاً
+            response = requests.get(url, stream=True)
+            with open(filename, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
 
-    bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
+            # الرفع كحساب (يتجاوز 50 ميجا)
+            await client.send_video(message.chat.id, filename, caption="✅ جودة أصلية (200MB+)")
+            os.remove(filename)
+        except Exception as e:
+            await message.reply(f"❌ خطأ: {str(e)}")
+
+    await status.delete()
 
 if __name__ == "__main__":
     keep_alive()
-    print("Bot is alive and polling...")
-    bot.infinity_polling()
+    print("UserBot started!")
+    app_bot.run()
