@@ -1,5 +1,4 @@
-pyTelegramBotAPI
+pyrogram
+tgcrypto
 flask
-gunicorn
-yt-dlp
 requests
